@@ -22,13 +22,13 @@ jobs:
             operating_system: [ubuntu-latest, macos-latest]
             exclude:
               - nodejs_version: 18
-                operating_systems: macos-latest
+                operating_system: macos-latest
         runs-on: ${{ matrix.operating_system}}
         steps:
         - name: checkout repository 
           uses: actions/checkout@v4
         
-        - name: setup NodeJs Version - ${{ matrix.nodejs_version }} 
+        - name: setup NodeJs Version - ${{ matrix.nodejs_version }}
           uses: actions/setup-node@v3
           with:
             node-version: ${{ matrix.nodejs_version }}
