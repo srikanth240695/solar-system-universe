@@ -176,15 +176,32 @@ jobs:
           with:
             version: 'v1.32.2'
 
-        - name: set kubeconfig
-          uses: azure/k8s-set-context@v4
-          with:
-            method: kubeconfig
-            kubeconfig: ${{ secrets.KUBECONFIG }}
-
-        - name: Fetch kubernetes cluster details
+        # Install k3d - lightweight Kubernetes in Docker
+        - name: Install k3d
+          run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+        
+        # Create a k3d cluster for kubectl testing
+        - name: Create k3d cluster
+          run: k3d cluster create test-cluster
+        
+        # Verify kubectl works
+        - name: Verify kubectl commands work
           run: |
-            kubectl version 
-            echo -----------------------
+            kubectl version
+            echo "------------------------"
             kubectl get nodes
+            echo "------------------------"
+            kubectl get all --all-namespaces
+
+        # - name: set kubeconfig
+        #   uses: azure/k8s-set-context@v4
+        #   with:
+        #     method: kubeconfig
+        #     kubeconfig: ${{ secrets.KUBECONFIG }}
+
+        # - name: Fetch kubernetes cluster details
+        #   run: |
+        #     kubectl version 
+        #     echo -----------------------
+        #     kubectl get nodes
         
