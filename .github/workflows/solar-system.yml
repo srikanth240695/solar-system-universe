@@ -193,10 +193,10 @@ jobs:
             echo "------------------------"
             kubectl get all --all-namespaces
 
-            - name: Save nginx Ingress controller IP as a GITHUB Environment Variable
-            run: |
-              echo "INGRESS_IP = $(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath= "{.status.loadBalancer.ingress[0].ip}")" >> $GITHUB_ENV
-              
+        - name: Save nginx Ingress controller IP as a GITHUB Environment Variable
+          run: |
+            echo "INGRESS_IP = $(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath= "{.status.loadBalancer.ingress[0].ip}")" >> $GITHUB_ENV
+
         - name: Replace token in Manifest files
           uses: cschleiden/replace-tokens@v1
           with:
