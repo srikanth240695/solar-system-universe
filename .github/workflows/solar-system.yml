@@ -166,7 +166,9 @@ jobs:
 
     dev-deploy:
       needs: docker
-      environment: development
+      environment: 
+        name: development
+        url: https://${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
       outputs:
         APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
         TEST_RESULT: ${{ steps.test-app.outputs.result }} 
@@ -304,7 +306,8 @@ jobs:
     Integration-testing:
         name: Dev Integration Testing
         needs: dev-deploy
-        environment: development
+        environment: 
+            name: development
         runs-on: ubuntu-latest
         steps:
         - name: Check test result
