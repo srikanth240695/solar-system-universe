@@ -259,67 +259,31 @@ jobs:
             echo "Pod status:"
             kubectl get pods -n default
 
-        # - name: Troubleshoot pod if not ready
-        #   run: |
-        #     # Get pod name
-        #     POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
-        #     echo "Pod name: $POD"
+        - name: Test application with port-forward
+          run: |
+            # Start port forwarding in the background
+            kubectl port-forward -n default service/solar-system 8080:3000 &
+            PF_PID=$!
             
-        #     # Check pod status
-        #     STATUS=$(kubectl get pod $POD -n default -o jsonpath='{.status.phase}')
-        #     READY=$(kubectl get pod $POD -n default -o jsonpath='{.status.containerStatuses[0].ready}')
+            # Give it a moment to establish
+            sleep 5
             
-        #     echo "Pod $POD is in status: $STATUS, Ready: $READY"
+            echo "Testing application on port 8080..."
+            curl -v --max-time 10 http://localhost:8080
             
-        #     if [ "$READY" != "true" ]; then
-        #     echo "=== Pod Description ==="
-        #     kubectl describe pod $POD -n default
+            # Capture the exit code
+            CURL_EXIT=$?
             
-        #     echo "=== Pod Logs ==="
-        #     kubectl logs $POD -n default || echo "Could not get logs"
+            # Stop port forwarding
+            kill $PF_PID || true
             
-        #     echo "=== Kubernetes Events ==="
-        #     kubectl get events -n default --sort-by='.lastTimestamp' | tail -n 20
-        #     fi
-
-        # - name: Test application with port-forward
-        #   run: |
-        #     # Get pod name
-        #     POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
-            
-        #     # Check pod status
-        #     STATUS=$(kubectl get pod $POD -n default -o jsonpath='{.status.phase}')
-            
-        #     if [ "$STATUS" == "Running" ]; then
-        #     # Start port forwarding in the background
-        #     kubectl port-forward -n default pod/$POD 8080:3000 &
-        #     PF_PID=$!
-            
-        #     # Give it a moment to establish
-        #     sleep 5
-            
-        #     echo "Testing application on port 8080..."
-        #     curl -v --max-time 10 http://localhost:8080 || echo "Could not connect to application"
-            
-        #     # Stop port forwarding
-        #     kill $PF_PID || true
-        #     else
-        #     echo "Pod is not in Running state, skipping port-forward test"
-        #     fi
-            
-        #     # Show application logs regardless
-        #     echo "Application logs:"
-        #     kubectl logs -n default $POD || echo "Could not get logs"
-  
-        # # Verify the token replacement worked
-        # - name: Verify token replacement
-        #   run: |
-        #     echo "Checking replaced files:"
-        #     cat kubernetes/development/deployment.yaml
-        #     echo "---"
-        #     cat kubernetes/development/service.yaml
-        #     echo "---"
-        #     cat kubernetes/development/ingress.yaml
+            # Report success/failure
+            if [ $CURL_EXIT -eq 0 ]; then
+            echo "✅ Application is working!"
+            else
+            echo "❌ Could not connect to application"
+            exit 1
+            fi
 
         # - name: Save nginx Ingress controller IP as a GITHUB Environment Variable
         #   run: |
