@@ -251,44 +251,44 @@ jobs:
             kubectl apply -f kubernetes/development
 
         # Add the new testing steps here
-    - name: Wait for pod to be ready
-    run: |
-      echo "Waiting for pod to be ready..."
-      kubectl wait --for=condition=ready pod -l app=solar-system -n default --timeout=90s
-      
-      echo "Pod is now ready!"
-      kubectl get pods -n default
+        - name: Wait for pod to be ready
+          run: |
+            echo "Waiting for pod to be ready..."
+            kubectl wait --for=condition=ready pod -l app=solar-system -n default --timeout=90s
+        
+            echo "Pod is now ready!"
+            kubectl get pods -n default
 
-    - name: Test application with port-forward
-        run: |
-        # Start port forwarding in the background
-        kubectl port-forward -n default service/solar-system 8080:3000 &
-        PF_PID=$!
-        
-        # Give it a moment to establish
-        sleep 5
-        
-        echo "Testing application on port 8080..."
-        curl -v --max-time 10 http://localhost:8080
-        
-        # Capture the exit code
-        CURL_EXIT=$?
-        
-        # Stop port forwarding
-        kill $PF_PID
-        
-        # Show application logs
-        POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
-        echo "Application logs:"
-        kubectl logs -n default $POD
-        
-        # Report success/failure
-        if [ $CURL_EXIT -eq 0 ]; then
-            echo "✅ Application is working!"
-        else
-            echo "❌ Could not connect to application"
-            exit 1
-        fi
+        - name: Test application with port-forward
+          run: |
+            # Start port forwarding in the background
+            kubectl port-forward -n default service/solar-system 8080:3000 &
+            PF_PID=$!
+            
+            # Give it a moment to establish
+            sleep 5
+            
+            echo "Testing application on port 8080..."
+            curl -v --max-time 10 http://localhost:8080
+            
+            # Capture the exit code
+            CURL_EXIT=$?
+            
+            # Stop port forwarding
+            kill $PF_PID
+            
+            # Show application logs
+            POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
+            echo "Application logs:"
+            kubectl logs -n default $POD
+            
+            # Report success/failure
+            if [ $CURL_EXIT -eq 0 ]; then
+                echo "✅ Application is working!"
+            else
+                echo "❌ Could not connect to application"
+                exit 1
+            fi
   
         # # Verify the token replacement worked
         # - name: Verify token replacement
