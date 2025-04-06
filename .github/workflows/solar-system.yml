@@ -193,32 +193,20 @@ jobs:
             echo "------------------------"
             kubectl get all --all-namespaces
 
-        - name: Get Ingress IP
+        # Set environment variables with simple default values
+        - name: Set Environment Variables
           run: |
-            # Wait for ingress controller to be ready
-            kubectl -n ingress-nginx wait --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s || true
-            
-            # Get the ingress IP with proper jsonpath syntax
-            INGRESS_IP=$(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-            echo "INGRESS_IP=$INGRESS_IP" >> $GITHUB_ENV
-            
-            # If IP is empty, try hostname instead (for AWS ELB)
-            if [ -z "$INGRESS_IP" ]; then
-            INGRESS_IP=$(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-            echo "INGRESS_IP=$INGRESS_IP" >> $GITHUB_ENV
-            fi
-            
-            # Set default namespace
+            # Set default values without trying to access ingress
+            echo "INGRESS_IP=localhost" >> $GITHUB_ENV
             echo "NAMESPACE=default" >> $GITHUB_ENV
-            
-            # Set replicas
             echo "REPLICAS=1" >> $GITHUB_ENV
           shell: /usr/bin/bash -e {0}
           env:
             MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
             MONGO_USERNAME: superuser
             MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-        
+
+  # Replace tokens in Kubernetes manifests
         - name: Replace tokens in Kubernetes manifests
           uses: cschleiden/replace-tokens@v1
           with:
