@@ -211,8 +211,8 @@ jobs:
           run: |
            ls -la
            ls -la kubernetes/
-           ls -la development/
-           ls -la staging/
+           ls -la kubernetes/development/
+           ls -la kubernetes/staging/
 
   # Replace tokens in Kubernetes manifests
         - name: Replace tokens in Kubernetes manifests
