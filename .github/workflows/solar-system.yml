@@ -249,6 +249,16 @@ jobs:
         - name: Deploy to Dev env
           run: |
             kubectl apply -f kubernetes/development
+
+        - name: Show Application URL
+          run: |
+            echo "Application URL: http://solar-system-${{ env.NAMESPACE }}.${{ env.INGRESS_IP }}.nip.io"
+            
+            # Check if Ingress is ready
+            kubectl get ingress -n ${{ env.NAMESPACE }}
+            
+            # Check if pods are running
+            kubectl get pods -n ${{ env.NAMESPACE }}
   
         # # Verify the token replacement worked
         # - name: Verify token replacement
