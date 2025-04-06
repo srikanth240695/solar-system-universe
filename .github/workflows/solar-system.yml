@@ -206,20 +206,20 @@ jobs:
             MONGO_USERNAME: superuser
             MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 
-        # Check for Kubernetes files and display their content
-        - name: Check for Kubernetes files and content
-          run: |
-            echo "Kubernetes files:"
-            ls -la kubernetes/development/
+        # # Check for Kubernetes files and display their content
+        # - name: Check for Kubernetes files and content
+        #   run: |
+        #     echo "Kubernetes files:"
+        #     ls -la kubernetes/development/
             
-            echo "Content of deployment.yaml:"
-            cat kubernetes/development/deployment.yaml
+        #     echo "Content of deployment.yaml:"
+        #     cat kubernetes/development/deployment.yaml
             
-            echo "Content of service.yaml:"
-            cat kubernetes/development/service.yaml
+        #     echo "Content of service.yaml:"
+        #     cat kubernetes/development/service.yaml
             
-            echo "Content of ingress.yaml:"
-            cat kubernetes/development/ingress.yaml
+        #     echo "Content of ingress.yaml:"
+        #     cat kubernetes/development/ingress.yaml
 
         - name: Replace tokens in Kubernetes manifests
           uses: cschleiden/replace-tokens@v1
@@ -236,15 +236,15 @@ jobs:
             REPLICAS: ${{ env.REPLICAS }}
             K8S_IMAGE: 809565/solar-system:${{ github.sha }}
   
-        # Verify the token replacement worked
-        - name: Verify token replacement
-          run: |
-            echo "Checking replaced files:"
-            cat kubernetes/development/deployment.yaml
-            echo "---"
-            cat kubernetes/development/service.yaml
-            echo "---"
-            cat kubernetes/development/ingress.yaml
+        # # Verify the token replacement worked
+        # - name: Verify token replacement
+        #   run: |
+        #     echo "Checking replaced files:"
+        #     cat kubernetes/development/deployment.yaml
+        #     echo "---"
+        #     cat kubernetes/development/service.yaml
+        #     echo "---"
+        #     cat kubernetes/development/ingress.yaml
 
         # - name: Save nginx Ingress controller IP as a GITHUB Environment Variable
         #   run: |
