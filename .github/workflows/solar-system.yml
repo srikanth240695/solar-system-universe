@@ -168,6 +168,7 @@ jobs:
       needs: docker
       outputs:
         APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
+        TEST_RESULT: ${{ steps.test-app.outputs.result }} 
       runs-on: ubuntu-latest
       steps:
         - name: checkout Repo
@@ -257,6 +258,34 @@ jobs:
           run: |
             echo "APP_INGRESS_HOST=$(kubectl -n ${{ env.NAMESPACE }} get ingress -o jsonpath="{.items[0].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
 
+        # Add this new step at the end of the job:
+        - name: Test application
+          id: test-app  # Important: this ID is used for outputs
+          run: |
+            echo "Testing application..."
+        
+            # Port forward the service
+            kubectl port-forward -n default service/solar-system 8080:3000 &
+            PF_PID=$!
+            sleep 5
+            
+            # Test the application
+            echo "Accessing application..."
+            curl -v http://localhost:8080/
+            CURL_EXIT=$?
+            
+            # Stop port forwarding
+            kill $PF_PID || true
+            
+            # Set output for next job
+            if [ $CURL_EXIT -eq 0 ]; then
+                echo "result=success" >> "$GITHUB_OUTPUT"
+                echo "✅ Application test successful"
+            else
+                echo "result=failure" >> "$GITHUB_OUTPUT"
+                echo "❌ Application test failed"
+            fi
+
     Integration-testing:
         name: Dev Integration Testing
         needs: dev-deploy
@@ -266,26 +295,15 @@ jobs:
           env:
             URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}
           run: |
-            echo $URL
-            echo "-------------------------------"
+            echo "Test result from previous job: ${{ needs.dev-deploy.outputs.TEST_RESULT }}"
+            echo "Application URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}"
             
-            # First, try a simple curl to see what we get
-            echo "Raw response:"
-            curl -v https://$URL/ -k || echo "Failed to connect to $URL"
-            
-            # Try without https (since you're using localhost)
-            echo "-------------------------------"
-            echo "Trying without https:"
-            curl -v http://$URL/ || echo "Failed to connect to $URL"
-            
-            # Try with port-forward as a fallback
-            echo "-------------------------------"
-            echo "Trying with port-forward:"
-            kubectl port-forward -n default service/solar-system 8080:3000 &
-            PF_PID=$!
-            sleep 5
-            curl -v http://localhost:8080/ || echo "Failed to connect via port-forward"
-            kill $PF_PID || true
+            if [ "${{ needs.dev-deploy.outputs.TEST_RESULT }}" == "success" ]; then
+            echo "✅ Application is working properly!"
+            else
+            echo "❌ Application test failed in previous job"
+            exit 1  # Fail this job if the test failed
+            fi
 
         # # Add the new testing steps here
         # - name: Wait for pod to be ready (with increased timeout)
