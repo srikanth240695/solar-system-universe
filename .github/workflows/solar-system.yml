@@ -206,6 +206,12 @@ jobs:
             MONGO_USERNAME: superuser
             MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 
+        # Check if the kubernetes files exist
+        - name: Check for Kubernetes files
+          run: |
+           ls -la
+           ls -la kubernetes/
+
   # Replace tokens in Kubernetes manifests
         - name: Replace tokens in Kubernetes manifests
           uses: cschleiden/replace-tokens@v1
