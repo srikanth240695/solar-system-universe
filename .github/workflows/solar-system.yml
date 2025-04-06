@@ -206,21 +206,28 @@ jobs:
             MONGO_USERNAME: superuser
             MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 
-        # Check if the kubernetes files exist
-        - name: Check for Kubernetes files
+        # Check for Kubernetes files and display their content
+        - name: Check for Kubernetes files and content
           run: |
-           ls -la
-           ls -la kubernetes/
-           ls -la kubernetes/development/
-           ls -la kubernetes/staging/
+            echo "Kubernetes files:"
+            ls -la kubernetes/development/
+            
+            echo "Content of deployment.yaml:"
+            cat kubernetes/development/deployment.yaml
+            
+            echo "Content of service.yaml:"
+            cat kubernetes/development/service.yaml
+            
+            echo "Content of ingress.yaml:"
+            cat kubernetes/development/ingress.yaml
 
-  # Replace tokens in Kubernetes manifests
+        # Replace tokens in Kubernetes manifests
         - name: Replace tokens in Kubernetes manifests
           uses: cschleiden/replace-tokens@v1
           with:
             tokenPrefix: '_{_'
             tokenSuffix: '_}_'
-            files: '["kubernetes/development/*.yaml"]'
+            files: 'kubernetes/development/*.yaml'
           env:
             MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
             MONGO_USERNAME: superuser
@@ -229,6 +236,16 @@ jobs:
             NAMESPACE: ${{ env.NAMESPACE }}
             REPLICAS: ${{ env.REPLICAS }}
             IMAGE: 809565/solar-system:${{ github.sha }}
+  
+        # Verify the token replacement worked
+        - name: Verify token replacement
+          run: |
+            echo "Checking replaced files:"
+            cat kubernetes/development/deployment.yaml
+            echo "---"
+            cat kubernetes/development/service.yaml
+            echo "---"
+            cat kubernetes/development/ingress.yaml
 
         # - name: Save nginx Ingress controller IP as a GITHUB Environment Variable
         #   run: |
