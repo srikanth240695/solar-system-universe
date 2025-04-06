@@ -234,7 +234,7 @@ jobs:
             INGRESS_IP: ${{ env.INGRESS_IP }}
             NAMESPACE: ${{ env.NAMESPACE }}
             REPLICAS: ${{ env.REPLICAS }}
-            K8S_IMAGE: 809565/solar-system:${{ github.sha }}
+            K8S_IMAGE: 809565/solar-system-universe:${{ github.sha }}
 
         - name: create Mongo DB secret
           run: |
@@ -254,62 +254,62 @@ jobs:
         - name: Wait for pod to be ready (with increased timeout)
           run: |
             echo "Waiting for pod to be ready..."
-            kubectl wait --for=condition=ready pod -l app=solar-system -n default --timeout=180s || true
+            kubectl wait --for=condition=ready pod -l app=solar-system-universe -n default --timeout=180s || true
             
             echo "Pod status:"
             kubectl get pods -n default
 
-        - name: Troubleshoot pod if not ready
-          run: |
-            # Get pod name
-            POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
-            echo "Pod name: $POD"
+        # - name: Troubleshoot pod if not ready
+        #   run: |
+        #     # Get pod name
+        #     POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
+        #     echo "Pod name: $POD"
             
-            # Check pod status
-            STATUS=$(kubectl get pod $POD -n default -o jsonpath='{.status.phase}')
-            READY=$(kubectl get pod $POD -n default -o jsonpath='{.status.containerStatuses[0].ready}')
+        #     # Check pod status
+        #     STATUS=$(kubectl get pod $POD -n default -o jsonpath='{.status.phase}')
+        #     READY=$(kubectl get pod $POD -n default -o jsonpath='{.status.containerStatuses[0].ready}')
             
-            echo "Pod $POD is in status: $STATUS, Ready: $READY"
+        #     echo "Pod $POD is in status: $STATUS, Ready: $READY"
             
-            if [ "$READY" != "true" ]; then
-            echo "=== Pod Description ==="
-            kubectl describe pod $POD -n default
+        #     if [ "$READY" != "true" ]; then
+        #     echo "=== Pod Description ==="
+        #     kubectl describe pod $POD -n default
             
-            echo "=== Pod Logs ==="
-            kubectl logs $POD -n default || echo "Could not get logs"
+        #     echo "=== Pod Logs ==="
+        #     kubectl logs $POD -n default || echo "Could not get logs"
             
-            echo "=== Kubernetes Events ==="
-            kubectl get events -n default --sort-by='.lastTimestamp' | tail -n 20
-            fi
+        #     echo "=== Kubernetes Events ==="
+        #     kubectl get events -n default --sort-by='.lastTimestamp' | tail -n 20
+        #     fi
 
-        - name: Test application with port-forward
-          run: |
-            # Get pod name
-            POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
+        # - name: Test application with port-forward
+        #   run: |
+        #     # Get pod name
+        #     POD=$(kubectl get pods -n default -l app=solar-system -o jsonpath='{.items[0].metadata.name}')
             
-            # Check pod status
-            STATUS=$(kubectl get pod $POD -n default -o jsonpath='{.status.phase}')
+        #     # Check pod status
+        #     STATUS=$(kubectl get pod $POD -n default -o jsonpath='{.status.phase}')
             
-            if [ "$STATUS" == "Running" ]; then
-            # Start port forwarding in the background
-            kubectl port-forward -n default pod/$POD 8080:3000 &
-            PF_PID=$!
+        #     if [ "$STATUS" == "Running" ]; then
+        #     # Start port forwarding in the background
+        #     kubectl port-forward -n default pod/$POD 8080:3000 &
+        #     PF_PID=$!
             
-            # Give it a moment to establish
-            sleep 5
+        #     # Give it a moment to establish
+        #     sleep 5
             
-            echo "Testing application on port 8080..."
-            curl -v --max-time 10 http://localhost:8080 || echo "Could not connect to application"
+        #     echo "Testing application on port 8080..."
+        #     curl -v --max-time 10 http://localhost:8080 || echo "Could not connect to application"
             
-            # Stop port forwarding
-            kill $PF_PID || true
-            else
-            echo "Pod is not in Running state, skipping port-forward test"
-            fi
+        #     # Stop port forwarding
+        #     kill $PF_PID || true
+        #     else
+        #     echo "Pod is not in Running state, skipping port-forward test"
+        #     fi
             
-            # Show application logs regardless
-            echo "Application logs:"
-            kubectl logs -n default $POD || echo "Could not get logs"
+        #     # Show application logs regardless
+        #     echo "Application logs:"
+        #     kubectl logs -n default $POD || echo "Could not get logs"
   
         # # Verify the token replacement worked
         # - name: Verify token replacement
