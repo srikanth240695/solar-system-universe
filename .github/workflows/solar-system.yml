@@ -166,6 +166,7 @@ jobs:
 
     dev-deploy:
       needs: docker
+      environment: development
       outputs:
         APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
         TEST_RESULT: ${{ steps.test-app.outputs.result }} 
@@ -186,6 +187,12 @@ jobs:
         # Create a k3d cluster for kubectl testing
         - name: Create k3d cluster
           run: k3d cluster create test-cluster
+
+        - name: Create namespace
+          run: |
+            kubectl create namespace ${{ vars.NAMESPACE }} || true
+            echo "Using namespace: ${{ vars.NAMESPACE }}"
+            echo "Using replicas: ${{ vars.REPLICAS }}"
         
         # Verify kubectl works
         - name: Verify kubectl commands work
@@ -196,18 +203,18 @@ jobs:
             echo "------------------------"
             kubectl get all --all-namespaces
 
-        # Set environment variables with simple default values
-        - name: Set Environment Variables
-          run: |
-            # Set default values without trying to access ingress
-            echo "INGRESS_IP=localhost" >> $GITHUB_ENV
-            echo "NAMESPACE=default" >> $GITHUB_ENV
-            echo "REPLICAS=1" >> $GITHUB_ENV
-          shell: /usr/bin/bash -e {0}
-          env:
-            MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
-            MONGO_USERNAME: superuser
-            MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+        # # Set environment variables with simple default values
+        # - name: Set Environment Variables
+        #   run: |
+        #     # Set default values without trying to access ingress
+        #     echo "INGRESS_IP=localhost" >> $GITHUB_ENV
+        #     echo "NAMESPACE=default" >> $GITHUB_ENV
+        #     echo "REPLICAS=1" >> $GITHUB_ENV
+        #   shell: /usr/bin/bash -e {0}
+        #   env:
+        #     MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
+        #     MONGO_USERNAME: superuser
+        #     MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 
         # # Check for Kubernetes files and display their content
         # - name: Check for Kubernetes files and content
@@ -232,16 +239,16 @@ jobs:
             files: 'kubernetes/development/*.yaml'
           env:
             MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
-            MONGO_USERNAME: superuser
+            MONGO_USERNAME: ${{ vars.MONGO_USERNAME}}
             MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
             INGRESS_IP: ${{ env.INGRESS_IP }}
-            NAMESPACE: ${{ env.NAMESPACE }}
-            REPLICAS: ${{ env.REPLICAS }}
+            NAMESPACE: ${{ vars.NAMESPACE }}
+            REPLICAS: ${{ vars.REPLICAS }}
             K8S_IMAGE: 809565/solar-system-universe:${{ github.sha }}
 
         - name: create Mongo DB secret
           run: |
-            kubectl -n ${{ env.NAMESPACE }} create secret generic mongo-db-creds \
+            kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
             --from-literal=MONGO_URI=${{ env.MONGO_URI }} \
             --from-literal=MONGO_USERNAME=${{ vars.MONGO_USERNAME }} \
             --from-literal=MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }} \
@@ -253,19 +260,19 @@ jobs:
           run: |
             kubectl apply -f kubernetes/development
 
-        - name: Set App Ingress Host URL
-          id: set-ingress-host-address
-          run: |
-            echo "APP_INGRESS_HOST=$(kubectl -n ${{ env.NAMESPACE }} get ingress -o jsonpath="{.items[0].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
-
         # Add the new testing steps here
         - name: Wait for pod to be ready (with increased timeout)
           run: |
             echo "Waiting for pod to be ready..."
-            kubectl wait --for=condition=ready pod -l app=solar-system -n default --timeout=180s || true
+            kubectl wait --for=condition=ready pod -l app=solar-system -n ${{ vars.NAMESPACE }} --timeout=180s || true
             
             echo "Pod status:"
-            kubectl get pods -n default
+            kubectl get pods -n ${{ vars.NAMESPACE }}
+
+        - name: Set App Ingress Host URL
+          id: set-ingress-host-address
+          run: |
+            echo "APP_INGRESS_HOST=$(kubectl -n ${{ vars.NAMESPACE }} get ingress -o jsonpath="{.items[0].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
 
         - name: Test application
           id: test-app  # Important: this ID is used for outputs
@@ -273,7 +280,7 @@ jobs:
             echo "Testing application..."
         
             # Port forward the service
-            kubectl port-forward -n default service/solar-system 8080:3000 &
+            kubectl port-forward -n ${{ vars.NAMESPACE }} service/solar-system 8080:3000 &
             PF_PID=$!
             sleep 5
             
@@ -297,14 +304,16 @@ jobs:
     Integration-testing:
         name: Dev Integration Testing
         needs: dev-deploy
+        environment: development
         runs-on: ubuntu-latest
         steps:
-        - name: Test URL output using CURL and JQ
+        - name: Check test result
           env:
             URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}
           run: |
             echo "Test result from previous job: ${{ needs.dev-deploy.outputs.TEST_RESULT }}"
             echo "Application URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}"
+            echo "Using namespace: ${{ vars.NAMESPACE }}"
             
             if [ "${{ needs.dev-deploy.outputs.TEST_RESULT }}" == "success" ]; then
             echo "✅ Application is working properly!"
