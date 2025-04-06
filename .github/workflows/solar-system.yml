@@ -258,7 +258,15 @@ jobs:
           run: |
             echo "APP_INGRESS_HOST=$(kubectl -n ${{ env.NAMESPACE }} get ingress -o jsonpath="{.items[0].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
 
-        # Add this new step at the end of the job:
+        # Add the new testing steps here
+        - name: Wait for pod to be ready (with increased timeout)
+          run: |
+            echo "Waiting for pod to be ready..."
+            kubectl wait --for=condition=ready pod -l app=solar-system -n default --timeout=180s || true
+            
+            echo "Pod status:"
+            kubectl get pods -n default
+
         - name: Test application
           id: test-app  # Important: this ID is used for outputs
           run: |
@@ -305,14 +313,7 @@ jobs:
             exit 1  # Fail this job if the test failed
             fi
 
-        # # Add the new testing steps here
-        # - name: Wait for pod to be ready (with increased timeout)
-        #   run: |
-        #     echo "Waiting for pod to be ready..."
-        #     kubectl wait --for=condition=ready pod -l app=solar-system -n default --timeout=180s || true
-            
-        #     echo "Pod status:"
-        #     kubectl get pods -n default
+        
 
         # - name: Test application with port-forward
         #   run: |
