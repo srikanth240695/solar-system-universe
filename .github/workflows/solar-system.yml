@@ -165,6 +165,7 @@ jobs:
                 ghcr.io/${{ github.repository_owner }}/solar-system-universe:${{ github.sha}}
 
     dev-deploy:
+      if: contains(github.ref, 'feature/')
       needs: docker
       environment: 
         name: development
@@ -314,6 +315,7 @@ jobs:
             fi
 
     dev-Integration-testing:
+        if: contains(github.ref, 'feature/')
         name: Dev Integration Testing
         needs: dev-deploy
         environment: 
@@ -390,8 +392,9 @@ jobs:
         #     kubectl version 
         #     echo -----------------------
         #     kubectl get nodes
-        
+
     prod-deploy:
+      if: github.ref == 'refs/heads/main'
       needs: docker
       environment: 
         name: production
@@ -513,7 +516,8 @@ jobs:
             fi
 
     Prod-Integration-testing:
-        name: Dev Integration Testing
+        if: github.ref == 'refs/heads/main'
+        name: Prod Integration Testing
         needs: prod-deploy
         environment: 
             name: production
@@ -521,13 +525,13 @@ jobs:
         steps:
         - name: Check test result
           env:
-            URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}
+            URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}
           run: |
-            echo "Test result from previous job: ${{ needs.dev-deploy.outputs.TEST_RESULT }}"
-            echo "Application URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}"
+            echo "Test result from previous job: ${{ needs.prod-deploy.outputs.TEST_RESULT }}"
+            echo "Application URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}"
             echo "Using namespace: ${{ vars.NAMESPACE }}"
             
-            if [ "${{ needs.dev-deploy.outputs.TEST_RESULT }}" == "success" ]; then
+            if [ "${{ needs.prod-deploy.outputs.TEST_RESULT }}" == "success" ]; then
             echo "✅ Application is working properly!"
             else
             echo "❌ Application test failed in previous job"
