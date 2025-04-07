@@ -1,0 +1,539 @@
+name: Solar System WorkFlow
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+            - 'feature/*'
+
+env:
+    MONGO_URI: 'mongodb+srv://supercluster.d83jj.mongodb.net/superData'
+    MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+    MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+
+
+jobs:
+    unit-testing:
+        name: unit-testing
+        services:
+          mongo-db:
+            image: siddharth67/mongo-db:non-prod
+            ports:
+              - 27017:27017
+        env:
+            MONGO_URI: 'mongodb://localhost:27017/superData'
+            MONGO_USERNAME: non-prod-user
+            MONGO_PASSWORD: non-prod-password
+
+        strategy:
+          matrix:
+            nodejs_version: [18]
+            operating_system: [ubuntu-latest, macos-latest]
+            exclude:
+              - nodejs_version: 18
+                operating_system: macos-latest
+        runs-on: ${{ matrix.operating_system}}
+
+        steps:
+        - name: checkout repository 
+          uses: actions/checkout@v4
+        
+        - name: setup NodeJs Version - ${{ matrix.nodejs_version }}
+          uses: actions/setup-node@v3
+          with:
+            node-version: ${{ matrix.nodejs_version }}
+
+        - name: cache NPM dependencies
+          uses: actions/cache@v4
+          with:
+            path: node_modules
+            key: ${{ runner.os }}-node_modules-${{ hashFiles('**/package-lock.json') }}
+
+        - name: Install Dependencies
+          run: npm install
+               
+        - name: Unit Testing
+          id: nodejs-unit-testing-step
+          run: npm test 
+
+        - name: Archive test Result
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: Mocha-Test-Result - ${{ matrix.operating_system }}-${{ matrix.nodejs_version }}
+            path: test-results.xml
+
+    code-coverage:
+        name: code-coverage
+        container: 
+          image: node:18
+        
+        services:
+          mongo-db:
+            image: siddharth67/mongo-db:non-prod
+            options:
+              --name mongo
+        env:
+            MONGO_URI: 'mongodb://mongo:27017/superData'
+            MONGO_USERNAME: non-prod-user
+            MONGO_PASSWORD: non-prod-password
+
+        runs-on: ubuntu-latest
+        steps:
+        - name: checkout repository 
+          uses: actions/checkout@v4
+        
+        # - name: setup NodeJs Version - 18
+        #   uses: actions/setup-node@v3
+        #   with:
+        #     node-version: 18
+          
+        - name: cache NPM dependencies
+          uses: actions/cache@v4
+          with:
+            path: node_modules
+            key: ${{ runner.os }}-node_modules-${{ hashFiles('**/package-lock.json') }}
+
+        - name: Install Dependencies
+          run: npm install
+        
+        - name: Check Code Coverage
+          continue-on-error: true
+          run: npm run coverage
+        
+        - name: Archive test Result
+          uses: actions/upload-artifact@v4
+          with:
+            name: code-coverage-result
+            path: coverage
+            retention-days: 5 
+    
+    docker:
+        name: Containerization
+        needs: [unit-testing, code-coverage]
+        permissions: 
+            packages: write
+        runs-on: ubuntu-latest
+        steps:
+        - name: Checkout Repo
+          uses: actions/checkout@v3
+
+        - name: Login to Docker Hub
+          uses: docker/login-action@v3
+          with:
+            username: ${{ vars.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+        - name: GHCR Login 
+          uses: docker/login-action@v3
+          with:
+            registry: ghcr.io
+            username: ${{ github.repository_owner }}
+            password: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Docker build for Testing
+          uses: docker/build-push-action@v4
+          with: 
+            context: .
+            push: false
+            tags: ${{ vars.DOCKERHUB_USERNAME}}/solar-system-universe:${{ github.sha}}
+
+        - name: Docker Image Testing
+          run: |
+            docker images
+            docker run --name solar-system-appy -d \
+                -p 3000:3000 \
+                -e MONGO_URI=$MONGO_URI \
+                -e MONGO_USERNAME=$MONGO_USERNAME \
+                -e MONGO_PASSWORD=$MONGO_PASSWORD \
+                ${{ vars.DOCKERHUB_USERNAME}}/solar-system-universe:${{ github.sha}}
+            
+            export IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' solar-system-appy)
+            echo $IP
+
+            echo Testing Image URL using wget 
+            wget -q -O - 127.0.0.1:3000/live | grep live
+
+        - name: Container Registry push
+          uses: docker/build-push-action@v4
+          with: 
+            context: .
+            push: true
+            tags: |
+                ${{ vars.DOCKERHUB_USERNAME}}/solar-system-universe:${{ github.sha}}
+                ghcr.io/${{ github.repository_owner }}/solar-system-universe:${{ github.sha}}
+
+    dev-deploy:
+      if: contains(github.ref, 'feature/')
+      needs: docker
+      environment: 
+        name: development
+        url: https://${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
+      outputs:
+        APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
+        TEST_RESULT: ${{ steps.test-app.outputs.result }} 
+      runs-on: ubuntu-latest
+      steps:
+        - name: checkout Repo
+          uses: actions/checkout@v4
+
+        - name: Install kubectl CLI
+          uses: azure/setup-kubectl@v4
+          with:
+            version: 'v1.32.2'
+
+        # Install k3d - lightweight Kubernetes in Docker
+        - name: Install k3d
+          run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+        
+        # Create a k3d cluster for kubectl testing
+        - name: Create k3d cluster
+          run: k3d cluster create test-cluster
+
+        - name: Create namespace
+          run: |
+            kubectl create namespace ${{ vars.NAMESPACE }} || true
+            echo "Using namespace: ${{ vars.NAMESPACE }}"
+            echo "Using replicas: ${{ vars.REPLICAS }}"
+        
+        # Verify kubectl works
+        - name: Verify kubectl commands work
+          run: |
+            kubectl version
+            echo "------------------------"
+            kubectl get nodes
+            echo "------------------------"
+            kubectl get all --all-namespaces
+
+        # # Set environment variables with simple default values
+        # - name: Set Environment Variables
+        #   run: |
+        #     # Set default values without trying to access ingress
+        #     echo "INGRESS_IP=localhost" >> $GITHUB_ENV
+        #     echo "NAMESPACE=default" >> $GITHUB_ENV
+        #     echo "REPLICAS=1" >> $GITHUB_ENV
+        #   shell: /usr/bin/bash -e {0}
+        #   env:
+        #     MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
+        #     MONGO_USERNAME: superuser
+        #     MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+
+        # # Check for Kubernetes files and display their content
+        # - name: Check for Kubernetes files and content
+        #   run: |
+        #     echo "Kubernetes files:"
+        #     ls -la kubernetes/development/
+            
+        #     echo "Content of deployment.yaml:"
+        #     cat kubernetes/development/deployment.yaml
+            
+        #     echo "Content of service.yaml:"
+        #     cat kubernetes/development/service.yaml
+            
+        #     echo "Content of ingress.yaml:"
+        #     cat kubernetes/development/ingress.yaml
+
+        - name: Replace tokens in Kubernetes manifests
+          uses: cschleiden/replace-tokens@v1
+          with:
+            tokenPrefix: '${'
+            tokenSuffix: '}'
+            files: 'kubernetes/development/*.yaml'
+          env:
+            MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
+            MONGO_USERNAME: ${{ vars.MONGO_USERNAME}}
+            MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+            INGRESS_IP: ${{ env.INGRESS_IP }}
+            NAMESPACE: ${{ vars.NAMESPACE }}
+            REPLICAS: ${{ vars.REPLICAS }}
+            K8S_IMAGE: 809565/solar-system-universe:${{ github.sha }}
+
+        - name: create Mongo DB secret
+          run: |
+            kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
+            --from-literal=MONGO_URI=${{ env.MONGO_URI }} \
+            --from-literal=MONGO_USERNAME=${{ vars.MONGO_USERNAME }} \
+            --from-literal=MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }} \
+            --save-config \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+        - name: Fix Ingress Host
+          run: |
+            echo "Checking ingress manifest before applying..."
+            if grep -q "\.\.nip\.io" kubernetes/development/ingress.yaml; then
+            echo "Found invalid host with double dots, fixing it..."
+            sed -i 's/solar-system-development\.\./solar-system-development.localhost./g' kubernetes/development/ingress.yaml
+            echo "Fixed ingress manifest:"
+            cat kubernetes/development/ingress.yaml
+            fi
+
+        - name: Deploy to Dev env
+          run: |
+            kubectl apply -f kubernetes/development
+
+        # Add the new testing steps here
+        - name: Wait for pod to be ready (with increased timeout)
+          run: |
+            echo "Waiting for pod to be ready..."
+            kubectl wait --for=condition=ready pod -l app=solar-system -n ${{ vars.NAMESPACE }} --timeout=180s || true
+            
+            echo "Pod status:"
+            kubectl get pods -n ${{ vars.NAMESPACE }}
+
+        - name: Set App Ingress Host URL
+          id: set-ingress-host-address
+          run: |
+            echo "APP_INGRESS_HOST=$(kubectl -n ${{ vars.NAMESPACE }} get ingress -o jsonpath="{.items[0].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
+
+        - name: Test application
+          id: test-app  # Important: this ID is used for outputs
+          run: |
+            echo "Testing application..."
+        
+            # Port forward the service
+            kubectl port-forward -n ${{ vars.NAMESPACE }} service/solar-system 8080:3000 &
+            PF_PID=$!
+            sleep 5
+            
+            # Test the application
+            echo "Accessing application..."
+            curl -v http://localhost:8080/
+            CURL_EXIT=$?
+            
+            # Stop port forwarding
+            kill $PF_PID || true
+            
+            # Set output for next job
+            if [ $CURL_EXIT -eq 0 ]; then
+                echo "result=success" >> "$GITHUB_OUTPUT"
+                echo "✅ Application test successful"
+            else
+                echo "result=failure" >> "$GITHUB_OUTPUT"
+                echo "❌ Application test failed"
+            fi
+
+    dev-Integration-testing:
+        if: contains(github.ref, 'feature/')
+        name: Dev Integration Testing
+        needs: dev-deploy
+        environment: 
+            name: development
+        runs-on: ubuntu-latest
+        steps:
+        - name: Check test result
+          env:
+            URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}
+          run: |
+            echo "Test result from previous job: ${{ needs.dev-deploy.outputs.TEST_RESULT }}"
+            echo "Application URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}"
+            echo "Using namespace: ${{ vars.NAMESPACE }}"
+            
+            if [ "${{ needs.dev-deploy.outputs.TEST_RESULT }}" == "success" ]; then
+            echo "✅ Application is working properly!"
+            else
+            echo "❌ Application test failed in previous job"
+            exit 1  # Fail this job if the test failed
+            fi
+
+        
+
+        # - name: Test application with port-forward
+        #   run: |
+        #     # Start port forwarding in the background
+        #     kubectl port-forward -n default service/solar-system 8080:3000 &
+        #     PF_PID=$!
+            
+        #     # Give it a moment to establish
+        #     sleep 5
+            
+        #     echo "Testing application on port 8080..."
+        #     curl -v --max-time 10 http://localhost:8080
+            
+        #     # Capture the exit code
+        #     CURL_EXIT=$?
+            
+        #     # Stop port forwarding
+        #     kill $PF_PID || true
+            
+        #     # Report success/failure
+        #     if [ $CURL_EXIT -eq 0 ]; then
+        #     echo "✅ Application is working!"
+        #     else
+        #     echo "❌ Could not connect to application"
+        #     exit 1
+        #     fi
+
+        # - name: Save nginx Ingress controller IP as a GITHUB Environment Variable
+        #   run: |
+        #     echo "INGRESS_IP = $(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath= "{.status.loadBalancer.ingress[0].ip}")" >> $GITHUB_ENV
+
+        # - name: Replace token in Manifest files
+        #   uses: cschleiden/replace-tokens@v1
+        #   with:
+        #     tokenPrefix: '_{_'
+        #     tokenSuffix: '_}_'
+        #     files: '["kubernetes\development\*.yaml"]'
+        #   env:
+        #     NAMESPACE: ${{ vars.NAMESPACE }}
+        #     REPLICAS: ${{ vars.REPLICAS }}
+        #     IMAGE: ${{ vars.DOCKERHUB_USERNAME}}/solar-system:${{ github.sha}}
+        #     INGRESS_IP: ${{ env.INGRESS_IP}} 
+
+        # - name: set kubeconfig
+        #   uses: azure/k8s-set-context@v4
+        #   with:
+        #     method: kubeconfig
+        #     kubeconfig: ${{ secrets.KUBECONFIG }}
+
+        # - name: Fetch kubernetes cluster details
+        #   run: |
+        #     kubectl version 
+        #     echo -----------------------
+        #     kubectl get nodes
+
+    prod-deploy:
+      if: github.ref == 'refs/heads/main'
+      needs: docker
+      environment: 
+        name: production
+        url: https://${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
+      outputs:
+        APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
+        TEST_RESULT: ${{ steps.test-app.outputs.result }} 
+      runs-on: ubuntu-latest
+      steps:
+        - name: checkout Repo
+          uses: actions/checkout@v4
+
+        - name: Install kubectl CLI
+          uses: azure/setup-kubectl@v4
+          with:
+            version: 'v1.32.2'
+
+        # Install k3d - lightweight Kubernetes in Docker
+        - name: Install k3d
+          run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+        
+        # Create a k3d cluster for kubectl testing
+        - name: Create k3d cluster
+          run: k3d cluster create test-cluster
+
+        - name: Create namespace
+          run: |
+            kubectl create namespace ${{ vars.NAMESPACE }} || true
+            echo "Using namespace: ${{ vars.NAMESPACE }}"
+            echo "Using replicas: ${{ vars.REPLICAS }}"
+        
+        # Verify kubectl works
+        - name: Verify kubectl commands work
+          run: |
+            kubectl version
+            echo "------------------------"
+            kubectl get nodes
+            echo "------------------------"
+            kubectl get all --all-namespaces
+
+        - name: Replace tokens in Kubernetes manifests
+          uses: cschleiden/replace-tokens@v1
+          with:
+            tokenPrefix: '${'
+            tokenSuffix: '}'
+            files: 'kubernetes/development/*.yaml'
+          env:
+            MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
+            MONGO_USERNAME: ${{ vars.MONGO_USERNAME}}
+            MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+            INGRESS_IP: ${{ env.INGRESS_IP }}
+            NAMESPACE: ${{ vars.NAMESPACE }}
+            REPLICAS: ${{ vars.REPLICAS }}
+            K8S_IMAGE: 809565/solar-system-universe:${{ github.sha }}
+
+        - name: create Mongo DB secret
+          run: |
+            kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
+            --from-literal=MONGO_URI=${{ env.MONGO_URI }} \
+            --from-literal=MONGO_USERNAME=${{ vars.MONGO_USERNAME }} \
+            --from-literal=MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }} \
+            --save-config \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+        - name: Fix Ingress Host
+          run: |
+            echo "Checking ingress manifest before applying..."
+            if grep -q "\.\.nip\.io" kubernetes/development/ingress.yaml; then
+            echo "Found invalid host with double dots, fixing it..."
+            sed -i 's/solar-system-development\.\./solar-system-development.localhost./g' kubernetes/development/ingress.yaml
+            echo "Fixed ingress manifest:"
+            cat kubernetes/development/ingress.yaml
+            fi
+
+        - name: Deploy to Dev env
+          run: |
+            kubectl apply -f kubernetes/development
+
+        # Add the new testing steps here
+        - name: Wait for pod to be ready (with increased timeout)
+          run: |
+            echo "Waiting for pod to be ready..."
+            kubectl wait --for=condition=ready pod -l app=solar-system -n ${{ vars.NAMESPACE }} --timeout=180s || true
+            
+            echo "Pod status:"
+            kubectl get pods -n ${{ vars.NAMESPACE }}
+
+        - name: Set App Ingress Host URL
+          id: set-ingress-host-address
+          run: |
+            echo "APP_INGRESS_HOST=$(kubectl -n ${{ vars.NAMESPACE }} get ingress -o jsonpath="{.items[0].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
+
+        - name: Test application
+          id: test-app  # Important: this ID is used for outputs
+          run: |
+            echo "Testing application..."
+        
+            # Port forward the service
+            kubectl port-forward -n ${{ vars.NAMESPACE }} service/solar-system 8080:3000 &
+            PF_PID=$!
+            sleep 5
+            
+            # Test the application
+            echo "Accessing application..."
+            curl -v http://localhost:8080/
+            CURL_EXIT=$?
+            
+            # Stop port forwarding
+            kill $PF_PID || true
+            
+            # Set output for next job
+            if [ $CURL_EXIT -eq 0 ]; then
+                echo "result=success" >> "$GITHUB_OUTPUT"
+                echo "✅ Application test successful"
+            else
+                echo "result=failure" >> "$GITHUB_OUTPUT"
+                echo "❌ Application test failed"
+            fi
+
+    Prod-Integration-testing:
+        if: github.ref == 'refs/heads/main'
+        name: Prod Integration Testing
+        needs: prod-deploy
+        environment: 
+            name: production
+        runs-on: ubuntu-latest
+        steps:
+        - name: Check test result
+          env:
+            URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}
+          run: |
+            echo "Test result from previous job: ${{ needs.prod-deploy.outputs.TEST_RESULT }}"
+            echo "Application URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}"
+            echo "Using namespace: ${{ vars.NAMESPACE }}"
+            
+            if [ "${{ needs.prod-deploy.outputs.TEST_RESULT }}" == "success" ]; then
+            echo "✅ Application is working properly!"
+            else
+            echo "❌ Application test failed in previous job"
+            exit 1  # Fail this job if the test failed
+            fi
