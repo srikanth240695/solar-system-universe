@@ -440,7 +440,7 @@ jobs:
           with:
             tokenPrefix: '${'
             tokenSuffix: '}'
-            files: 'kubernetes/development/*.yaml'
+            files: 'kubernetes/production/*.yaml'
           env:
             MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
             MONGO_USERNAME: ${{ vars.MONGO_USERNAME}}
@@ -463,16 +463,16 @@ jobs:
         - name: Fix Ingress Host
           run: |
             echo "Checking ingress manifest before applying..."
-            if grep -q "\.\.nip\.io" kubernetes/development/ingress.yaml; then
+            if grep -q "\.\.nip\.io" kubernetes/production/ingress.yaml; then
             echo "Found invalid host with double dots, fixing it..."
-            sed -i 's/solar-system-development\.\./solar-system-development.localhost./g' kubernetes/development/ingress.yaml
+            sed -i 's/solar-system-production\.\./solar-system-production.localhost./g' kubernetes/production/ingress.yaml
             echo "Fixed ingress manifest:"
-            cat kubernetes/development/ingress.yaml
+            cat kubernetes/production/ingress.yaml
             fi
 
-        - name: Deploy to Dev env
+        - name: Deploy to Prod env
           run: |
-            kubectl apply -f kubernetes/development
+            kubectl apply -f kubernetes/production
 
         # Add the new testing steps here
         - name: Wait for pod to be ready (with increased timeout)
