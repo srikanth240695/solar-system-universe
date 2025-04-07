@@ -258,6 +258,16 @@ jobs:
             --dry-run=client \
             -o yaml | kubectl apply -f -
 
+        - name: Fix Ingress Host
+          run: |
+            echo "Checking ingress manifest before applying..."
+            if grep -q "\.\.nip\.io" kubernetes/development/ingress.yaml; then
+            echo "Found invalid host with double dots, fixing it..."
+            sed -i 's/solar-system-development\.\./solar-system-development.localhost./g' kubernetes/development/ingress.yaml
+            echo "Fixed ingress manifest:"
+            cat kubernetes/development/ingress.yaml
+            fi
+
         - name: Deploy to Dev env
           run: |
             kubectl apply -f kubernetes/development
