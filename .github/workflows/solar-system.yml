@@ -168,6 +168,8 @@ jobs:
       if: contains(github.ref, 'feature/')
       needs: docker
       uses: srikanth240695/solar-system-universe/.github/workflows/reuse-deploy.yml@feature/exploring-workflows
+      secrets:
+        mangodb-password: ${{ secrets.MONGO_PASSWORD }}
       # with:
       #   environment_name: development
       #   mongodb-uri: ${{ vars.MONGO_URI}}
