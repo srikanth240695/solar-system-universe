@@ -323,3 +323,22 @@ jobs:
             echo "❌ Application test failed in previous job"
             exit 1  # Fail this job if the test failed
             fi
+
+    slack_notification:
+      if: always()
+      name: Slack Notification
+      needs: [dev-Integration-testing, prod-Integration-testing]
+      continue-on-error: true
+      runs-on: ubuntu-latest
+      steps:
+      - uses: actions/checkout@v4
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: slack_github
+          SLACK_COLOR: ${{ job.status }} 
+          SLACK_ICON: https://gitlab.com/sidd-harth/solar-system/-/raw/main/images/saturn.png
+          SLACK_MESSAGE: ':hammer_and_wrench: Triggered by ${{ github.actor }}'
+          SLACK_TITLE: Information
