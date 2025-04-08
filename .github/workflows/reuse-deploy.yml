@@ -99,7 +99,7 @@ jobs:
           with:
             tokenPrefix: '${'
             tokenSuffix: '}'
-            files: '["${{ inputs.k8s-manifest-dir }}*.yaml"]'
+            files: '${{ inputs.k8s-manifest-dir }}/*.yaml' 
           env:
             MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
             MONGO_USERNAME: ${{ vars.MONGO_USERNAME}}
@@ -122,11 +122,11 @@ jobs:
         - name: Fix Ingress Host
           run: |
             echo "Checking ingress manifest before applying..."
-            if grep -q "\.\.nip\.io" kubernetes/development/ingress.yaml; then
+            if grep -q "\.\.nip\.io" ${{ inputs.k8s-manifest-dir }}/ingress.yaml; then
             echo "Found invalid host with double dots, fixing it..."
-            sed -i 's/solar-system-development\.\./solar-system-development.localhost./g' kubernetes/development/ingress.yaml
+            sed -i 's/solar-system-${{ inputs.environment }}\.\./solar-system-${{ inputs.environment }}.localhost./g' ${{ inputs.k8s-manifest-dir }}/ingress.yaml
             echo "Fixed ingress manifest:"
-            cat kubernetes/development/ingress.yaml
+            cat ${{ inputs.k8s-manifest-dir }}/ingress.yaml
             fi
 
         - name: Deploy to Dev env
