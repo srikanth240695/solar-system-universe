@@ -175,7 +175,6 @@ jobs:
         environment: development
         k8s-manifest-dir: kubernetes/development
 
-
     dev-Integration-testing:
         if: contains(github.ref, 'feature/')
         name: Dev Integration Testing
