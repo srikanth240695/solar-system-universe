@@ -23,7 +23,13 @@ on:
     secrets:
       mangodb-password:
         required: true
-    
+    outputs:
+      application-url:
+        description: "The URL of the deployed application"
+        value: ${{ jobs.reuse-deploy.outputs.APP_INGRESS_URL }}
+      test-result:
+        description: "The result of the application test"
+        value: ${{ jobs.reuse-deploy.outputs.TEST_RESULT }}
 
 jobs:
     reuse-deploy:

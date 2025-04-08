@@ -185,13 +185,13 @@ jobs:
         steps:
         - name: Check test result
           env:
-            URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}
+            URL: ${{ needs.dev-deploy.outputs.application-url }}
           run: |
-            echo "Test result from previous job: ${{ needs.dev-deploy.outputs.TEST_RESULT }}"
-            echo "Application URL: ${{ needs.dev-deploy.outputs.APP_INGRESS_URL }}"
+            echo "Test result from previous job: ${{ needs.dev-deploy.outputs.test-result }}"
+            echo "Application URL: ${{ needs.dev-deploy.outputs.application-url }}"
             echo "Using namespace: ${{ vars.NAMESPACE }}"
             
-            if [ "${{ needs.dev-deploy.outputs.TEST_RESULT }}" == "success" ]; then
+            if [ "${{ needs.dev-deploy.outputs.test-result }}" == "success" ]; then
             echo "✅ Application is working properly!"
             else
             echo "❌ Application test failed in previous job"
@@ -280,13 +280,13 @@ jobs:
         steps:
         - name: Check test result
           env:
-            URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}
+            URL: ${{ needs.prod-deploy.outputs.application-url }}
           run: |
-            echo "Test result from previous job: ${{ needs.prod-deploy.outputs.TEST_RESULT }}"
-            echo "Application URL: ${{ needs.prod-deploy.outputs.APP_INGRESS_URL }}"
+            echo "Test result from previous job: ${{ needs.prod-deploy.outputs.test-result }}"
+            echo "Application URL: ${{ needs.prod-deploy.outputs.application-url }}"
             echo "Using namespace: ${{ vars.NAMESPACE }}"
             
-            if [ "${{ needs.prod-deploy.outputs.TEST_RESULT }}" == "success" ]; then
+            if [ "${{ needs.prod-deploy.outputs.test-result }}" == "success" ]; then
             echo "✅ Application is working properly!"
             else
             echo "❌ Application test failed in previous job"
