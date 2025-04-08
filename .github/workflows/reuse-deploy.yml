@@ -2,6 +2,24 @@ name: Deployment - Reusuable work flow
 
 on:
   workflow_call: 
+    inputs:
+      mongodb-uri:
+        required: true
+        type: string
+      kubectl-version:
+        description: provide the required kubectl version
+        required: false
+        default: v1.32.0
+        type: string
+      k8s-manifest-dir:
+        description: provide the deployment environment
+        default: kubernetes/
+        required: true
+        type: string
+      environment:
+        description: 'The environment to deploy to (development or production)'
+        required: true
+        type: string
     secrets:
       mangodb-password:
         required: true
@@ -10,7 +28,7 @@ on:
 jobs:
     reuse-deploy:
         environment: 
-            name: development
+            name: ${{ inputs.environment }}
             url: https://${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
         outputs:
             APP_INGRESS_URL: ${{ steps.set-ingress-host-address.outputs.APP_INGRESS_HOST }}
@@ -23,7 +41,7 @@ jobs:
         - name: Install kubectl CLI
           uses: azure/setup-kubectl@v4
           with:
-            version: 'v1.32.2'
+            version: '${{ inputs.kubectl-version }}'
 
         # Install k3d - lightweight Kubernetes in Docker
         - name: Install k3d
@@ -81,7 +99,7 @@ jobs:
           with:
             tokenPrefix: '${'
             tokenSuffix: '}'
-            files: 'kubernetes/development/*.yaml'
+            files: '["${{ inputs.k8s-manifest-dir }}*.yaml"]'
           env:
             MONGO_URI: mongodb+srv://supercluster.d83jj.mongodb.net/superData
             MONGO_USERNAME: ${{ vars.MONGO_USERNAME}}
@@ -94,7 +112,7 @@ jobs:
         - name: create Mongo DB secret
           run: |
             kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
-            --from-literal=MONGO_URI=${{ env.MONGO_URI }} \
+            --from-literal=MONGO_URI=${{ inputs.mongodb-uri }} \
             --from-literal=MONGO_USERNAME=${{ vars.MONGO_USERNAME }} \
             --from-literal=MONGO_PASSWORD=${{ secrets.mangodb-password }} \
             --save-config \
@@ -113,7 +131,7 @@ jobs:
 
         - name: Deploy to Dev env
           run: |
-            kubectl apply -f kubernetes/development
+            kubectl apply -f ${{ inputs.k8s-manifest-dir }}
 
         # Add the new testing steps here
         - name: Wait for pod to be ready (with increased timeout)

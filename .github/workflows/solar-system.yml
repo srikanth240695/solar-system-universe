@@ -169,15 +169,12 @@ jobs:
       needs: docker
       uses: srikanth240695/solar-system-universe/.github/workflows/reuse-deploy.yml@feature/exploring-workflows
       secrets:
-        mangodb-password: 
-      # with:
-      #   environment_name: development
-      #   mongodb-uri: ${{ vars.MONGO_URI}}
-      #   k8s-manifest-dir: kubernetes/development/
-      #   kubectl-version: v1.32.0
-      # secrets: 
-      #   k8s-kubeconfig: ${{ secrets.KUBECONFIG }}
-      #   mangodb-password: ${{ secrets.MONGO_PASSWORD }}
+        mangodb-password: ${{ secrets.MONGO_PASSWORD }}
+      with:
+        mongodb-uri: ${{ vars.MONGO_URI}}
+        environment: development
+        k8s-manifest-dir: kubernetes/development
+
 
     dev-Integration-testing:
         if: contains(github.ref, 'feature/')
@@ -264,16 +261,16 @@ jobs:
       uses: srikanth240695/solar-system-universe/.github/workflows/reuse-deploy.yml@feature/exploring-workflows
       secrets:
         mangodb-password: ${{ secrets.MONGO_PASSWORD }}
-      # with:
-      #   environment_name: development
-      #   mongodb-uri: ${{ vars.MONGO_URI}}
+      with:
+        mongodb-uri: ${{ vars.MONGO_URI}}
+        environment: production
+        k8s-manifest-dir: kubernetes/production
       #   k8s-manifest-dir: kubernetes/development/
       #   kubectl-version: v1.32.0
       # secrets: 
       #   k8s-kubeconfig: ${{ secrets.KUBECONFIG }}
       #   mangodb-password: ${{ secrets.MONGO_PASSWORD }}
       
-
     Prod-Integration-testing:
         if: github.ref == 'refs/heads/main'
         name: Prod Integration Testing
