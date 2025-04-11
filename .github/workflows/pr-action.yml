@@ -16,3 +16,9 @@ jobs:
           with:
             github-token: ${{ secrets.GITHUB_TOKEN }}
             giphy-api-key: ${{ secrets.GIPHY_API_KEY }} 
+
+        - name: Post Java PR Comment
+          uses: srikanth240695/js-action-pr@1.0.0-alpha
+          with:
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            giphy-api-key: ${{ secrets.GIPHY_API_KEY }}
